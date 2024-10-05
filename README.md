@@ -5,6 +5,14 @@ A little dsl for tracking work hours and payments.
 
 The UI is the Racket repl.
 
+## documentation
+
+After installing, run
+
+```sh
+raco doc launder
+```
+
 ## dependencies
 
 - [Racket](https://racket-lang.org/)
@@ -36,8 +44,8 @@ Require the library and run commands.
 > (add-payment! (today) 50)
 > (money-owed)
 70
-> (save-timesheet! "research.hours")
-> (load-timesheet! "research.hours")
+> (save-timesheet! (home-path "research.hours"))
+> (load-timesheet! (home-path "research.hours"))
 > (print-timesheet)
 '(timesheet
   (clock-in #f)

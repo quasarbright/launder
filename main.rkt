@@ -1,151 +1,78 @@
 #lang racket
 
 ; A DSL for working with timesheets.
+; includes functionality for tracking worked hours and payments.
 
 (module+ test (require rackunit))
 (provide
- ; TODO contracts and docs
- ; timesheet interface
+ (contract-out
+  ; timesheet interface
 
- ; files
+  ; files
 
- ; path -> void
- ; load a timesheet from a file
- load-timesheet!
- ; path -> void
- ; save the current timesheet to a file
- save-timesheet!
- ; string -> path
- ; like (home-path "foo.txt") for "~/foo.txt"
- home-path
+  ; load a timesheet from a file
+  [load-timesheet! (-> path-string? void?)]
+  ; save the current timesheet to a file
+  [save-timesheet! (-> path-string? void?)]
+  ; like (home-path "foo.txt") for "~/foo.txt"
+  [home-path (-> string? path?)]
 
- ; timesheet operations
+  ; timesheet operations
 
- ; [#:rate real?] -> void
- ; create an empty timesheet with an optional hourly rate (defaults to timesheet hourly rate)
- create-timesheet!
- ; date? [string?] [#:rate real?] -> void
- ; clock in at that time, with optional description and hourly rate (defaults to timesheet hourly rate)
- clock-in!
- ; date? [string?] [#:rate real?] -> void
- ; clock out at that time, with optional description and hourly rate (defaults to timesheet hourly rate)
- clock-out!
- ; date? natural? [string?] [#:rate real?] -> void
- ; add a duration of work with no start or end, with optional description and hourly rate (defaults to timesheet hourly rate).
- ; recommended to use date utilities like (today) which clear the date's time.
- ; time is in seconds. recommended to use time utilities like (hours 2)
- add-period!
- ; real? -> void
- ; set the current hourly rate for work
- set-hourly-rate!
- ; date? real? [string?]
- ; add a payment in dollars with optional description.
- add-payment!
- ; date? date? -> number?
- ; how many hours in between the two dates
- hours-between
- ; -> number?
- ; total hours in the whole timesheet
- total-hours
- ; -> number?
- ; the amount of hours of work you haven't been paid for yet
- unpaid-hours
- ; -> number?
- ; the amount of money you are owed for your work
- money-owed
- ; -> number?
- ; the total amount of money you've been paid. does not include money owed but not yet paid.
- money-earned
- ; -> void
- print-timesheet
+  ; create an empty timesheet with an optional hourly rate
+  [create-timesheet! (->* () (#:rate real?) void?)]
+  ; clock in at that time, with optional description and hourly rate (defaults to timesheet hourly rate)
+  [clock-in! (->* (date?) (string? #:rate real?) void?)]
+  ; clock out at that time, with optional description and hourly rate (defaults to timesheet hourly rate)
+  [clock-out! (->* (date?) (string? #:rate real?) void?)]
+  ; add a duration of work with no start or end, with optional description and hourly rate (defaults to timesheet hourly rate).
+  ; recommended to use date utilities like (today) which clear the date's time.
+  ; time is in seconds. recommended to use time utilities like (hours 2)
+  [add-period! (->* (date? natural?) (string? #:rate real?) void?)]
+  ; set the current hourly rate for work
+  [set-hourly-rate! (-> real? void?)]
+  ; add a payment in dollars with optional description.
+  [add-payment! (->* (date? real?) (string?) void?)]
+  ; how many hours in between the two dates
+  [hours-between (-> date? date? number?)]
+  ; total hours in the whole timesheet
+  [total-hours (-> real?)]
+  ; the amount of hours of work you haven't been paid for yet
+  [unpaid-hours (-> real?)]
+  ; the amount of money you are owed for your work
+  [money-owed (-> real?)]
+  ; the total amount of money you've been paid. does not include money owed but not yet paid.
+  [money-earned (-> real?)]
+  ; prints the timesheet out
+  [print-timesheet (-> void?)]
 
- ; date/time utilities
+  ; date/time utilities
 
- ; -> date?
- now
- ; natural? -> natural?
- ; (seconds n) gives the number of seconds in n seconds (identity function)
- seconds
- ; natural? -> natural?
- ; (minutes n) gives the number of seconds in n minutes
- minutes
- ; natural? -> natural?
- ; (minutes n) gives the number of seconds in n hours
- hours
- ; natural? -> date?
- ; cleared time
- days-ago
- ; natural? -> date?
- ; (time-ago n) is n seconds ago
- time-ago
- ; date?
- ; cleared time
- today
- ; date?
- ; cleared time
- yesterday
- ; date?
- ; cleared time
- tomorrow
- ; date? natural? -> date?
- ; subtracts seconds from date
- -/date
- ; date? natural? -> date?
- ; adds seconds to date
- +/date)
+  ; the current date
+  [now (-> date?)]
+  ; (seconds n) gives the number of seconds in n seconds (identity function)
+  [seconds (-> natural? natural?)]
+  ; (minutes n) gives the number of seconds in n minutes
+  [minutes (-> natural? natural?)]
+  ; (minutes n) gives the number of seconds in n hours
+  [hours (-> natural? natural?)]
+  ; cleared time
+  [days-ago (-> natural? date?)]
+  ; (time-ago n) is n seconds ago
+  [time-ago (-> natural? date?)]
+  ; cleared time (time set to midnight)
+  [today (-> date?)]
+  ; cleared time
+  [yesterday (-> date?)]
+  ; cleared time
+  [tomorrow (-> date?)]
+  ; subtracts seconds from date
+  [-/date (-> date? natural? date?)]
+  ; adds seconds to date
+  [+/date (-> date? natural? date?)]))
 (require racket/date
          racket/serialize
          racket/pretty)
-
-; helper functions for maintaining a timesheet in a repl user interface
-
-; user actions:
-; P0
-; - clock in (at a time, default to now)
-;   - with description
-; - clock out (at a time, default to now)
-;   - with description
-; - log some amount of time for a given date, like 3 hours on september 1st 2024, default to today
-;   - with description
-; - how many hours logged total
-; - are you clocked in?
-; P1
-; - some way of specifying you've been paid for your time?
-;   - you work in hours but get paid in dollars. the conversion rate is not necessarily constant. how should this be managed?
-;   - each interval/period has an hourly rate associated with it
-;   - the timesheet has a current hourly rate that used as the default when logging work
-;   - no need to mark a particular interval/period as paid for. just total money vs sum(hours * rate)
-;   - track when you got paid how much? yeah, log payments by day like periods. no need to track total paid directly.
-;   - UI:
-;     - (unpaid-hours) how many hours of work you haven't been paid for
-;     - (money-owed) returns how much money you are owed
-;     - (total-paid) how much money you've been paid total
-;     - (hourly-rate) returns current hourly rate
-;     - (set-hourly-rate! rate) obvious
-;     - (add-payment! amount [description])
-;     - new optional kwarg on clock-in, clock-out, and add-period: rate. defaults to current rate. Ex: (clock-in! (now) #:rate 40)
-;    - what if no hourly rate is set?
-;      - default to zero?
-;      - add an operation to retroactively put rate?
-;      - print a warning?
-;      - don't worry about it until you run into that use-case. for now, default to zero without warning.
-;    - if start and end have different rates, use the end's rate.
-; - help/docs. help can take you to docs like racket builtin help
-; - undo/redo. warn on something like adding a period with 2 seconds bc they meant hours.
-
-; can only have one clock-in at a time
-
-(module+ main
-  (create-timesheet! #:rate 40)
-  (add-period! (yesterday) (hours 1) "dilly dallying")
-  (clock-in! (time-ago (hours 2)) "started working")
-  (clock-out! (now) "done working")
-  (money-owed)
-  (add-payment! (today) 50)
-  (money-owed)
-  (save-timesheet! "research.hours")
-  (load-timesheet! "research.hours")
-  (print-timesheet))
 
 ; data definitions
 
@@ -154,7 +81,7 @@
 ; intervals is a (listof Interval)
 ; periods is a (listof Period)
 ; payments is a (listof Payment)
-; rate is a Real representing $/hr for work.
+; rate is a number? representing $/hr for work.
 ; clockin is a (or/c #f Event)
 
 ; an Interval is a
@@ -165,20 +92,20 @@
 (struct event [date description rate] #:prefab)
 ; date is a date?
 ; description is a (or/c #f string?)
-; rate is a Real in $/hr
+; rate is a number? in $/hr
 
 ; a Period is a
 (struct period [date duration description rate] #:prefab)
 ; date is a date?. the time is not necessarily accurate
 ; duration is an integer representing seconds
 ; description is a (or/c #f string?)
-; rate is a Real in $/hr
+; rate is a number? in $/hr
 
 ; A Payment is a
 (struct payment [date description amount] #:prefab)
 ; date is a date? the time is not necessarily accurate
 ; description is a (or/c #f string?)
-; amount is a Real in $
+; amount is a number? in $
 
 ; timesheet operations
 
