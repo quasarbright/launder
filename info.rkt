@@ -1,6 +1,6 @@
 #lang info
 (define collection "launder")
-(define deps '("base"))
+(define deps '("base" "gui-lib"))
 (define build-deps '("scribble-lib" "racket-doc" "rackunit-lib"))
 (define scribblings '(("scribblings/launder.scrbl" ())))
 (define pkg-desc "A little DSL for tracking work hours and payments")
