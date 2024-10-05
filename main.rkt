@@ -76,7 +76,8 @@
   [+/date (-> date? natural? date?)]))
 (require racket/date
          racket/serialize
-         racket/pretty)
+         racket/pretty
+         racket/gui)
 
 ; data definitions
 
@@ -337,18 +338,16 @@
 ; files
 
 (define (load-timesheet! path)
-  ; TODO dynamic wind to definitely close port, or use with-input-from-file
-  (define prt (open-input-file path))
-  (read-timesheet! prt)
-  (close-input-port prt))
-(define (read-timesheet! prt)
+  (with-input-from-file path
+    (lambda ()
+      (read-timesheet!))))
+(define (read-timesheet! [prt (current-input-port)])
   (with-edit (deserialize (read prt))))
 (define (save-timesheet! path)
-  ; TODO dynamic wind to definitely close port, or use with-output-from-file
-  (define prt (open-output-file path #:exists 'replace))
-  (write-timesheet! prt)
-  (close-output-port prt))
-(define (write-timesheet! prt)
+  (with-output-to-file path #:exists 'replace
+    (lambda ()
+      (write-timesheet!))))
+(define (write-timesheet! [prt (current-output-port)])
   (assert-current-timesheet!)
   (writeln (serialize (current-timesheet)) prt))
 ; like (home-path "Documents/file.txt")
