@@ -21,6 +21,10 @@
 
   ; create an empty timesheet with an optional hourly rate
   [create-timesheet! (->* () (#:rate real?) void?)]
+  ; undo last edit
+  [undo! (-> void?)]
+  ; redo last edit
+  [redo! (-> void?)]
   ; clock in at that time, with optional description and hourly rate (defaults to timesheet hourly rate)
   [clock-in! (->* (date?) (string? #:rate real?) void?)]
   ; clock out at that time, with optional description and hourly rate (defaults to timesheet hourly rate)
@@ -313,6 +317,12 @@
 ; user timesheet operations
 
 (define current-timesheet (make-parameter #f))
+; most recent first. in other words, undo gives the first
+(define previous-timesheets (make-parameter '()))
+; next first. in other words, redo gives the first.
+(define next-timesheets (make-parameter '()))
+; undo/redo via a zipper
+
 (define (assert-current-timesheet!)
   (unless (current-timesheet)
     (raise-user-error "no timesheet active!")))
@@ -327,12 +337,14 @@
 ; files
 
 (define (load-timesheet! path)
+  ; TODO dynamic wind to definitely close port, or use with-input-from-file
   (define prt (open-input-file path))
   (read-timesheet! prt)
   (close-input-port prt))
 (define (read-timesheet! prt)
-  (current-timesheet (deserialize (read prt))))
+  (with-edit (current-timesheet (deserialize (read prt)))))
 (define (save-timesheet! path)
+  ; TODO dynamic wind to definitely close port, or use with-output-from-file
   (define prt (open-output-file path #:exists 'replace))
   (write-timesheet! prt)
   (close-output-port prt))
@@ -361,25 +373,65 @@
 
 ; parameterized operations
 
+(define-syntax-rule (with-edit body ...)
+  (wrap-edit (lambda () body ...)))
+(define (wrap-edit thnk)
+  (dynamic-wind (lambda () (save-current!))
+                thnk
+                (lambda () (void))))
+
+; undo/redo
+
+; TODO make this a context handler to handle modification failure.
+; adds the current timesheet to the previous timesheets
+; empties the next timesheets
+(define (save-current!)
+  (assert-current-timesheet!)
+  (previous-timesheets (cons (current-timesheet) (previous-timesheets)))
+  (next-timesheets '()))
+(define (undo!)
+  (assert-current-timesheet!)
+  (when (null? (previous-timesheets))
+    (raise-user-error "no undo history"))
+  (define curr (current-timesheet))
+  (define prev (first (previous-timesheets)))
+  (previous-timesheets (rest (previous-timesheets)))
+  (current-timesheet prev)
+  (next-timesheets (cons curr (next-timesheets))))
+(define (redo!)
+  (assert-current-timesheet!)
+  (when (null? (next-timesheets))
+    (raise-user-error "no redo history"))
+  (define curr (current-timesheet))
+  (define next (first (next-timesheets)))
+  (next-timesheets (rest (next-timesheets)))
+  (current-timesheet next)
+  (previous-timesheets (cons curr (previous-timesheets))))
+
 (define (clock-in! dat [description #f] #:rate [rate #f])
   (assert-current-timesheet!)
-  (current-timesheet (timesheet-do-clock-in (current-timesheet) dat description #:rate rate)))
+  (with-edit
+    (current-timesheet (timesheet-do-clock-in (current-timesheet) dat description #:rate rate))))
 
 (define (clock-out! dat [description #f] #:rate [rate #f])
   (assert-current-timesheet!)
-  (current-timesheet (timesheet-do-clock-out (current-timesheet) dat description #:rate rate)))
+  (with-edit
+    (current-timesheet (timesheet-do-clock-out (current-timesheet) dat description #:rate rate))))
 
 (define (add-period! dat duration [description #f] #:rate [rate #f])
   (assert-current-timesheet!)
-  (current-timesheet (timesheet-add-period (current-timesheet) dat duration description #:rate rate)))
+  (with-edit
+    (current-timesheet (timesheet-add-period (current-timesheet) dat duration description #:rate rate))))
 
 (define (set-hourly-rate! rate)
   (assert-current-timesheet!)
-  (current-timesheet (timesheet-set-hourly-rate (current-timesheet) rate)))
+  (with-edit
+    (current-timesheet (timesheet-set-hourly-rate (current-timesheet) rate))))
 
 (define (add-payment! dat amt [desc #f])
   (assert-current-timesheet!)
-  (current-timesheet (timesheet-add-payment (current-timesheet) dat amt desc)))
+  (with-edit
+    (current-timesheet (timesheet-add-payment (current-timesheet) dat amt desc))))
 
 (define (hours-between start end)
   (assert-current-timesheet!)
