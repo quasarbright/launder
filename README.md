@@ -44,8 +44,8 @@ Require the library and run commands.
 > (add-payment! (today) 50)
 > (money-owed)
 70
-> (save-timesheet! (home-path "research.hours"))
-> (load-timesheet! (home-path "research.hours"))
+> (save-as! (home-path "research.ldr"))
+> (open! (home-path "research.ldr"))
 > (print-timesheet)
 '(timesheet
   (clock-in #f)

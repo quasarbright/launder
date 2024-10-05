@@ -10,17 +10,20 @@
 
   ; files
 
-  ; load a timesheet from a file
-  [load-timesheet! (-> path-string? void?)]
-  ; save the current timesheet to a file
-  [save-timesheet! (-> path-string? void?)]
+  ; load a timesheet from a file. If no path specified, opens a file picker gui.
+  [open! (->* () (path-string?) void?)]
+  ; save the current timesheet to a file. If no path specified, opens a file picker gui.
+  [save-as! (->* () (path-string?) void?)]
+  ; save the current timesheet to the current file (last file specified by open! or save-as!).
+  ; if no current file, opens a file picker gui.
+  [save! (-> void?)]
   ; like (home-path "foo.txt") for "~/foo.txt"
   [home-path (-> string? path?)]
 
   ; timesheet operations
 
   ; create an empty timesheet with an optional hourly rate
-  [create-timesheet! (->* () (#:rate real?) void?)]
+  [new! (->* () (#:rate real?) void?)]
   ; undo last edit
   [undo! (-> void?)]
   ; redo last edit
@@ -327,7 +330,7 @@
 (define (assert-current-timesheet!)
   (unless (current-timesheet)
     (raise-user-error "no timesheet active!")))
-(define (create-timesheet! #:rate [rate #f])
+(define (new! #:rate [rate #f])
   (unless rate
     (warn "created a timesheet without an hourly rate. assuming this work will be unpaid. otherwise, use set-hourly-rate!"))
   (current-timesheet (timesheet-set-hourly-rate empty-timesheet (or rate 0))))
@@ -336,20 +339,48 @@
   (displayln str (current-error-port)))
 
 ; files
-
-(define (load-timesheet! path)
+(define current-path (make-parameter #f))
+(define (open! [maybe-path #f])
+  (define path
+    (or maybe-path
+        (get-file "select a timesheet"
+                  #f
+                  #f
+                  #f
+                  #f
+                  null
+                  '(("Launder timesheet" "*.ldr")))
+        (raise-user-error "no file path supplied")))
   (with-input-from-file path
     (lambda ()
-      (read-timesheet!))))
+      (read-timesheet!)))
+  (current-path path))
 (define (read-timesheet! [prt (current-input-port)])
   (with-edit (deserialize (read prt))))
-(define (save-timesheet! path)
+
+(define (save!)
+  (if (current-path)
+      (save-as! (current-path))
+      (save-as!)))
+(define (save-as! [maybe-path #f])
+  (define path
+    (or maybe-path
+        (put-file "select a timesheet"
+                  #f
+                  #f
+                  #f
+                  #f
+                  null
+                  '(("Launder timesheet" "*.ldr")))
+        (raise-user-error "no file path supplied")))
   (with-output-to-file path #:exists 'replace
     (lambda ()
-      (write-timesheet!))))
+      (write-timesheet!)))
+  (current-path path))
 (define (write-timesheet! [prt (current-output-port)])
   (assert-current-timesheet!)
   (writeln (serialize (current-timesheet)) prt))
+
 ; like (home-path "Documents/file.txt")
 (define (home-path str)
   (build-path (find-system-path 'home-dir) str))
