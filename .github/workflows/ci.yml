@@ -26,4 +26,4 @@ jobs:
       - name: Compiling launder and building its docs
         run: raco setup --check-pkg-deps --unused-pkg-deps launder
       - name: Testing launder
-        run: raco test -x -p launder
+        run: xvfb-run -a raco test -x -p launder
