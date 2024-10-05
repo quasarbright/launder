@@ -249,13 +249,13 @@
 (module+ test
   (let ([now (now)])
     (check-equal? (timesheet-total-work-value (timesheet (list (interval (event now "" 10) (event (+/date now (hours 2)) "" 40)))
-                                                     (list (period (today) (hours 3) "" 50))
-                                                     ; should be ignored
-                                                     (list (payment (today) "" 1000))
-                                                     ; should be ignored
-                                                     60
-                                                     ; should be ignored
-                                                     (event (today) "" 70)))
+                                                         (list (period (today) (hours 3) "" 50))
+                                                         ; should be ignored
+                                                         (list (payment (today) "" 1000))
+                                                         ; should be ignored
+                                                         60
+                                                         ; should be ignored
+                                                         (event (today) "" 70)))
                   (+ (* 2 40)
                      (* 3 50)))))
 
@@ -342,6 +342,22 @@
 ; like (home-path "Documents/file.txt")
 (define (home-path str)
   (build-path (find-system-path 'home-dir) str))
+
+(module+ test
+  (test-case "serialization round trip"
+    (define sheet (timesheet-total-work-value (timesheet (list (interval (event (now) "" 10) (event (+/date (now) (hours 2)) "" 40)))
+                                                         (list (period (today) (hours 3) "" 50))
+                                                         ; should be ignored
+                                                         (list (payment (today) "" 1000))
+                                                         ; should be ignored
+                                                         60
+                                                         ; should be ignored
+                                                         (event (today) "" 70))))
+    (current-timesheet sheet)
+    (define-values (in out) (make-pipe))
+    (write-timesheet! out)
+    (read-timesheet! in)
+    (check-equal? (current-timesheet) sheet)))
 
 ; parameterized operations
 
