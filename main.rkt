@@ -317,11 +317,11 @@
 ; user timesheet operations
 
 (define current-timesheet (make-parameter #f))
+; undo/redo via a zipper
 ; most recent first. in other words, undo gives the first
 (define previous-timesheets (make-parameter '()))
 ; next first. in other words, redo gives the first.
 (define next-timesheets (make-parameter '()))
-; undo/redo via a zipper
 
 (define (assert-current-timesheet!)
   (unless (current-timesheet)
@@ -382,9 +382,8 @@
 
 ; undo/redo
 
-; TODO make this a context handler to handle modification failure.
-; adds the current timesheet to the previous timesheets
-; empties the next timesheets
+; adds the current timesheet to the previous timesheets.
+; empties the next timesheets. only do this before an edit.
 (define (save-current!)
   (assert-current-timesheet!)
   (previous-timesheets (cons (current-timesheet) (previous-timesheets)))
