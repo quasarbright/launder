@@ -10,6 +10,8 @@
  ; parameter for the current timesheet
  current-timesheet
  (contract-out
+  ; open documentation
+  [help (-> void?)]
   ; timesheet interface
 
   ; files
@@ -86,7 +88,8 @@
 (require racket/date
          racket/serialize
          racket/pretty
-         racket/lazy-require)
+         racket/lazy-require
+         (prefix-in rkt: racket/help))
 
 (lazy-require [racket/gui (get-file put-file)])
 
@@ -521,3 +524,5 @@
   (format "$~a/hr" rate))
 
 (define (round-to-tenth x) (/ (round (* 10 (exact->inexact x))) 10))
+
+(define (help) (rkt:help "launder"))

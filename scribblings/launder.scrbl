@@ -35,6 +35,9 @@ Returns @racket[#t] if @racket[v] is a @tech{timesheet}, @racket[#f] otherwise.
 
 The current timesheet. Defaults to an empty timesheet.
 
+@defproc[(help) void?]
+
+Opens this documentation.
 
 @section{File Operations}
 
