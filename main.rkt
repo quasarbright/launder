@@ -5,6 +5,10 @@
 
 (module+ test (require rackunit))
 (provide
+ ; predicate for timesheets
+ timesheet?
+ ; parameter for the current timesheet
+ current-timesheet
  (contract-out
   ; timesheet interface
 
@@ -49,7 +53,7 @@
   ; the amount of money you are owed for your work
   [money-owed (-> real?)]
   ; the total amount of money you've been paid. does not include money owed but not yet paid.
-  [money-earned (-> real?)]
+  [money-paid (-> real?)]
   ; prints the timesheet out
   [print-timesheet (-> void?)]
 
@@ -63,6 +67,8 @@
   [minutes (-> natural? natural?)]
   ; (minutes n) gives the number of seconds in n hours
   [hours (-> natural? natural?)]
+  ; (hours-ago n) is the time n hours ago
+  [hours-ago (-> natural? date?)]
   ; cleared time
   [days-ago (-> natural? date?)]
   ; (time-ago n) is n seconds ago
@@ -80,7 +86,9 @@
 (require racket/date
          racket/serialize
          racket/pretty
-         racket/gui)
+         racket/lazy-require)
+
+(lazy-require [racket/gui (get-file put-file)])
 
 ; data definitions
 
@@ -305,6 +313,7 @@
 (define SECONDS_PER_DAY (* SECONDS_PER_HOUR 24))
 ; with time cleared
 (define (days-ago n) (-/date (today) (* n SECONDS_PER_DAY)))
+(define (hours-ago n) (time-ago (hours n)))
 (define (time-ago seconds) (-/date (now) seconds))
 ; with time cleared
 (define (today) (clear-time (now)))
@@ -320,7 +329,7 @@
 
 ; user timesheet operations
 
-(define current-timesheet (make-parameter #f))
+(define current-timesheet (make-parameter empty-timesheet))
 ; undo/redo via a zipper
 ; most recent first. in other words, undo gives the first
 (define previous-timesheets (make-parameter '()))
@@ -333,7 +342,8 @@
 (define (new! #:rate [rate #f])
   (unless rate
     (warn "created a timesheet without an hourly rate. assuming this work will be unpaid. otherwise, use set-hourly-rate!"))
-  (current-timesheet (timesheet-set-hourly-rate empty-timesheet (or rate 0))))
+  (current-timesheet (timesheet-set-hourly-rate empty-timesheet (or rate 0)))
+  (current-path #f))
 
 (define (warn str)
   (displayln str (current-error-port)))
@@ -397,6 +407,8 @@
                                                          (event (today) "" 70))))
     (current-timesheet sheet)
     (define-values (in out) (make-pipe))
+    (write-timesheet! out)
+    (read-timesheet! in)
     (write-timesheet! out)
     (read-timesheet! in)
     (check-equal? (current-timesheet) sheet)))
@@ -474,7 +486,7 @@
   (assert-current-timesheet!)
   (timesheet-money-owed (current-timesheet)))
 
-(define (money-earned)
+(define (money-paid)
   (assert-current-timesheet!)
   (timesheet-money-earned (current-timesheet)))
 
@@ -503,7 +515,7 @@
      ,@(for/list ([pmt (timesheet-payments sheet)])
          (match pmt
            [(payment dat desc amount)
-            `(payment ,(date->string dat) ,desc amount)])))))
+            `(payment ,(date->string dat) ,desc ,amount)])))))
 
 (define (rate->datum rate)
   (format "$~a/hr" rate))
